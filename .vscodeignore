@@ -1,0 +1,14 @@
+**/.git/**
+**/.github/**
+**/.vscode/**
+**/.DS_Store
+
+src/**
+tsconfig.json
+package-lock.json
+node_modules/**
+*.vsix
+icon.svg
+
+# Optional assets that are not required at runtime
+demo.gif
