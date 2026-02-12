@@ -3,6 +3,7 @@
   "publisher": "WolshebnikSort",
   "displayName": "Automatic Import Sorter",
   "description": "Automatically sort and organize JavaScript/TypeScript imports with smart grouping and configurable modes",
+  "license": "MIT",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.74.0"
