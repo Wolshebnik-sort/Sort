@@ -1,8 +1,9 @@
 {
   "name": "sort-imports",
+  "publisher": "WolshebnikSort",
   "displayName": "Automatic Import Sorter",
   "description": "Automatically sort and organize JavaScript/TypeScript imports with smart grouping and configurable modes",
-  "version": "1.3.5",
+  "version": "0.0.1",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -139,7 +140,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Wolshebnik/sort-import-vs-code-extension.git"
+    "url": "https://github.com/Wolshebnik-sort/Sort.git"
   },
   "icon": "icon.png"
 }
