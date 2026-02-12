@@ -1,5 +1,5 @@
 {
-  "name": "sort-imports",
+  "name": "Wolshebnik-sort-imports",
   "publisher": "WolshebnikSort",
   "displayName": "Automatic Import Sorter",
   "description": "Automatically sort and organize JavaScript/TypeScript imports with smart grouping and configurable modes",
@@ -11,6 +11,16 @@
   "categories": [
     "Formatters",
     "Other"
+  ],
+  "keywords": [
+    "imports",
+    "sort imports",
+    "organize imports",
+    "typescript",
+    "javascript",
+    "formatter",
+    "code style",
+    "eslint"
   ],
   "activationEvents": [
     "onLanguage:javascript",
