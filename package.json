@@ -4,7 +4,7 @@
   "displayName": "Automatic Import Sorter",
   "description": "Automatically sort and organize JavaScript/TypeScript imports with smart grouping and configurable modes",
   "license": "MIT",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -97,6 +97,7 @@
           "items": {
             "type": "string",
             "enum": [
+              "spacing",
               "directives",
               "react",
               "libraries",
@@ -111,17 +112,26 @@
           },
           "default": [
             "directives",
+            "spacing",
             "react",
+            "spacing",
             "libraries",
+            "spacing",
             "absolute",
+            "spacing",
             "relative",
+            "spacing",
             "sideEffect",
+            "spacing",
             "styles",
+            "spacing",
             "interfaces",
+            "spacing",
             "comments",
+            "spacing",
             "functions"
           ],
-          "description": "Custom output order for import and related groups"
+          "description": "Custom output order for import and related groups. Add \"spacing\" to insert an empty line between groups"
         },
         "sortImports.sortOnSave": {
           "type": "boolean",
