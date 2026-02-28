@@ -25,6 +25,8 @@ type GroupKey =
   | 'comments'
   | 'functions';
 
+type GroupOrderItem = GroupKey | '__separator__';
+
 const DEFAULT_GROUP_ORDER: GroupKey[] = [
   'directives',
   'react',
@@ -38,13 +40,43 @@ const DEFAULT_GROUP_ORDER: GroupKey[] = [
   'functions',
 ];
 
+const DEFAULT_GROUP_ORDER_WITH_SEPARATORS: string[] = [
+  'directives',
+  'spacing',
+  'react',
+  'spacing',
+  'libraries',
+  'spacing',
+  'absolute',
+  'spacing',
+  'relative',
+  'spacing',
+  'sideEffect',
+  'spacing',
+  'styles',
+  'spacing',
+  'interfaces',
+  'spacing',
+  'comments',
+  'spacing',
+  'functions',
+];
+
 interface SortConfig {
   maxLineLength: number;
   indent: string;
   aliasPrefixes: string[];
   sortMode: 'length' | 'alphabetical';
   styleExtensions: string[];
-  groupsOrder: GroupKey[];
+  groupsOrder: GroupOrderItem[];
+}
+
+interface ParsedImportBlock {
+  source: string;
+  quote: string;
+  importClause: string | null;
+  isTypeOnly: boolean;
+  hasSemicolon: boolean;
 }
 
 export class SortImportsProvider {
@@ -54,7 +86,7 @@ export class SortImportsProvider {
       config.get<string[]>('styleExtensions', ['.css', '.scss', '.sass', '.less'])
     );
     const groupsOrder = this.normalizeGroupsOrder(
-      config.get<string[]>('groupsOrder', DEFAULT_GROUP_ORDER)
+      config.get<string[]>('groupsOrder', DEFAULT_GROUP_ORDER_WITH_SEPARATORS)
     );
 
     return {
@@ -183,9 +215,7 @@ export class SortImportsProvider {
           break;
         }
 
-        groups.interfaces.push(
-          this.sortInterfaceProperties(interfaceResult.block, config)
-        );
+        groups.interfaces.push(this.sortStructuredTypeMembers(interfaceResult.block, config));
         idx = interfaceResult.nextIdx;
         continue;
       }
@@ -196,7 +226,7 @@ export class SortImportsProvider {
           break;
         }
 
-        groups.interfaces.push(typeResult.block);
+        groups.interfaces.push(this.sortStructuredTypeMembers(typeResult.block, config));
         idx = typeResult.nextIdx;
         continue;
       }
@@ -368,25 +398,360 @@ export class SortImportsProvider {
     return null;
   }
 
-  private sortInterfaceProperties(interfaceBlock: string, config: SortConfig): string {
-    const openBraceIdx = interfaceBlock.indexOf('{');
-    const closeBraceIdx = interfaceBlock.lastIndexOf('}');
-
-    if (openBraceIdx === -1 || closeBraceIdx === -1 || closeBraceIdx <= openBraceIdx) {
-      return interfaceBlock;
+  private sortStructuredTypeMembers(block: string, config: SortConfig): string {
+    const bodyRange = this.findTopLevelBodyRange(block);
+    if (!bodyRange) {
+      return block;
     }
 
-    const header = interfaceBlock.slice(0, openBraceIdx + 1);
-    const body = interfaceBlock.slice(openBraceIdx + 1, closeBraceIdx);
-    const footer = interfaceBlock.slice(closeBraceIdx);
+    const header = block.slice(0, bodyRange.openBraceIdx + 1);
+    const body = block.slice(bodyRange.openBraceIdx + 1, bodyRange.closeBraceIdx);
+    const footer = block.slice(bodyRange.closeBraceIdx);
+    const sortedMembers = this.sortStructuredMembers(body, config);
 
-    const sortedProperties = body
+    if (!sortedMembers.length) {
+      return block;
+    }
+
+    return `${header}\n${sortedMembers.join('\n')}\n${footer}`;
+  }
+
+  private sortStructuredMembers(body: string, config: SortConfig): string[] {
+    const members = this.collectTopLevelMembers(body);
+    const normalizedMembers = members.map((member) =>
+      this.sortNestedStructuredMember(member, config)
+    );
+
+    return normalizedMembers.sort((a, b) =>
+      this.compareStrings(
+        this.getStructuredMemberSortValue(a, config.sortMode),
+        this.getStructuredMemberSortValue(b, config.sortMode),
+        config.sortMode
+      )
+    );
+  }
+
+  private findTopLevelBodyRange(
+    block: string
+  ): { openBraceIdx: number; closeBraceIdx: number } | null {
+    const interfaceStart = block.match(/^\s*(?:export\s+)?interface\b/);
+    const typeStart = block.match(/^\s*(?:export\s+)?type\b/);
+
+    if (!interfaceStart && !typeStart) {
+      return null;
+    }
+
+    let openBraceIdx = -1;
+
+    if (interfaceStart) {
+      openBraceIdx = block.indexOf('{');
+    } else {
+      const equalsIdx = block.indexOf('=');
+      if (equalsIdx === -1) {
+        return null;
+      }
+
+      for (let i = equalsIdx + 1; i < block.length; i++) {
+        const char = block[i];
+        if (/\s/.test(char)) {
+          continue;
+        }
+
+        if (char !== '{') {
+          return null;
+        }
+
+        openBraceIdx = i;
+        break;
+      }
+    }
+
+    if (openBraceIdx === -1) {
+      return null;
+    }
+
+    const closeBraceIdx = this.findMatchingBraceIndex(block, openBraceIdx);
+    if (closeBraceIdx === -1) {
+      return null;
+    }
+
+    return { openBraceIdx, closeBraceIdx };
+  }
+
+  private findMatchingBraceIndex(text: string, openBraceIdx: number): number {
+    let braceCount = 0;
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inTemplateString = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    for (let i = openBraceIdx; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+      const prevChar = text[i - 1];
+
+      if (inLineComment) {
+        if (char === '\n') {
+          inLineComment = false;
+        }
+        continue;
+      }
+
+      if (inBlockComment) {
+        if (prevChar === '*' && char === '/') {
+          inBlockComment = false;
+        }
+        continue;
+      }
+
+      if (inSingleQuote) {
+        if (char === "'" && prevChar !== '\\') {
+          inSingleQuote = false;
+        }
+        continue;
+      }
+
+      if (inDoubleQuote) {
+        if (char === '"' && prevChar !== '\\') {
+          inDoubleQuote = false;
+        }
+        continue;
+      }
+
+      if (inTemplateString) {
+        if (char === '`' && prevChar !== '\\') {
+          inTemplateString = false;
+        }
+        continue;
+      }
+
+      if (char === '/' && nextChar === '/') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+
+      if (char === '/' && nextChar === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+
+      if (char === "'") {
+        inSingleQuote = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inDoubleQuote = true;
+        continue;
+      }
+
+      if (char === '`') {
+        inTemplateString = true;
+        continue;
+      }
+
+      if (char === '{') {
+        braceCount++;
+      } else if (char === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          return i;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  private collectTopLevelMembers(body: string): string[] {
+    const members: string[] = [];
+    const currentMember: string[] = [];
+    let braceCount = 0;
+    let parenCount = 0;
+    let bracketCount = 0;
+
+    for (const line of body.split('\n')) {
+      if (!line.trim() && currentMember.length === 0) {
+        continue;
+      }
+
+      currentMember.push(line);
+
+      for (const char of line) {
+        if (char === '{') {
+          braceCount++;
+        } else if (char === '}') {
+          braceCount--;
+        } else if (char === '(') {
+          parenCount++;
+        } else if (char === ')') {
+          parenCount--;
+        } else if (char === '[') {
+          bracketCount++;
+        } else if (char === ']') {
+          bracketCount--;
+        }
+      }
+
+      const trimmed = line.trim();
+      const isTopLevel = braceCount === 0 && parenCount === 0 && bracketCount === 0;
+      const isMemberTerminator = trimmed.endsWith(';') || trimmed.endsWith(',');
+
+      if (isTopLevel && isMemberTerminator) {
+        members.push(currentMember.join('\n'));
+        currentMember.length = 0;
+      }
+    }
+
+    if (currentMember.some((line) => line.trim())) {
+      members.push(currentMember.join('\n'));
+    }
+
+    return members;
+  }
+
+  private getMemberSortKey(member: string): string {
+    return member
       .split('\n')
-      .filter((line) => line.trim())
-      .sort((a, b) => this.compareStrings(a.trim(), b.trim(), config.sortMode))
-      .join('\n');
+      .map((line) => line.trim())
+      .find(Boolean) ?? '';
+  }
 
-    return `${header}\n${sortedProperties}\n${footer}`;
+  private getStructuredMemberSortValue(
+    member: string,
+    mode: 'length' | 'alphabetical'
+  ): string {
+    if (mode === 'alphabetical') {
+      return this.getMemberSortKey(member);
+    }
+
+    return member.replace(/\s+/g, ' ').trim();
+  }
+
+  private sortNestedStructuredMember(member: string, config: SortConfig): string {
+    return this.sortStructuredObjectLiterals(member, config);
+  }
+
+  private sortStructuredObjectLiterals(text: string, config: SortConfig): string {
+    let result = '';
+    let cursor = 0;
+
+    while (cursor < text.length) {
+      const openBraceIdx = this.findNextOpenBraceIndex(text, cursor);
+      if (openBraceIdx === -1) {
+        result += text.slice(cursor);
+        break;
+      }
+
+      const closeBraceIdx = this.findMatchingBraceIndex(text, openBraceIdx);
+      if (closeBraceIdx === -1) {
+        result += text.slice(cursor);
+        break;
+      }
+
+      result += text.slice(cursor, openBraceIdx + 1);
+
+      const body = text.slice(openBraceIdx + 1, closeBraceIdx);
+      const normalizedBody = this.sortStructuredObjectLiterals(body, config);
+      const nestedMembers = this.collectTopLevelMembers(normalizedBody);
+
+      if (nestedMembers.length) {
+        const sortedNestedMembers = this.sortStructuredMembers(normalizedBody, config);
+        result += `\n${sortedNestedMembers.join('\n')}\n`;
+      } else {
+        result += normalizedBody;
+      }
+
+      result += text[closeBraceIdx];
+      cursor = closeBraceIdx + 1;
+    }
+
+    return result;
+  }
+
+  private findNextOpenBraceIndex(text: string, startIdx: number): number {
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inTemplateString = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    for (let i = startIdx; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+      const prevChar = text[i - 1];
+
+      if (inLineComment) {
+        if (char === '\n') {
+          inLineComment = false;
+        }
+        continue;
+      }
+
+      if (inBlockComment) {
+        if (prevChar === '*' && char === '/') {
+          inBlockComment = false;
+        }
+        continue;
+      }
+
+      if (inSingleQuote) {
+        if (char === "'" && prevChar !== '\\') {
+          inSingleQuote = false;
+        }
+        continue;
+      }
+
+      if (inDoubleQuote) {
+        if (char === '"' && prevChar !== '\\') {
+          inDoubleQuote = false;
+        }
+        continue;
+      }
+
+      if (inTemplateString) {
+        if (char === '`' && prevChar !== '\\') {
+          inTemplateString = false;
+        }
+        continue;
+      }
+
+      if (char === '/' && nextChar === '/') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+
+      if (char === '/' && nextChar === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+
+      if (char === "'") {
+        inSingleQuote = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inDoubleQuote = true;
+        continue;
+      }
+
+      if (char === '`') {
+        inTemplateString = true;
+        continue;
+      }
+
+      if (char === '{') {
+        return i;
+      }
+    }
+
+    return -1;
   }
 
   private classifyImport(
@@ -431,31 +796,53 @@ export class SortImportsProvider {
   }
 
   private formatBlock(block: string, config: SortConfig): string {
-    if (!block.includes('{')) return block;
-
     const normalizedBlock = block.replace(/\s+/g, ' ').trim();
-    const [importPart, fromPart] = normalizedBlock.split(/\s+from\s+/);
+    const parsedImport = this.parseImportBlock(normalizedBlock);
+    if (!parsedImport?.importClause) return block;
 
-    if (!fromPart) return block;
+    const namedRange = this.findNamedImportsRange(parsedImport.importClause);
+    if (!namedRange) return normalizedBlock;
 
-    const importsMatch = importPart.match(/import\s*\{([^}]+)\}/);
-    if (!importsMatch) return block;
+    const beforeNamed = parsedImport.importClause
+      .slice(0, namedRange.openBraceIdx)
+      .trim()
+      .replace(/,\s*$/, '');
+    const afterNamed = parsedImport.importClause.slice(namedRange.closeBraceIdx + 1).trim();
+    const imports = this.parseNamedImports(
+      parsedImport.importClause.slice(namedRange.openBraceIdx + 1, namedRange.closeBraceIdx)
+    )
+      .sort((a, b) =>
+        this.compareStrings(
+          this.getNamedImportSortKey(a, config.sortMode),
+          this.getNamedImportSortKey(b, config.sortMode),
+          config.sortMode
+        )
+      )
+      .map((specifier) => specifier.raw);
 
-    const imports = importsMatch[1]
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .sort((a, b) => this.compareStrings(a, b, config.sortMode));
+    if (!imports.length) return normalizedBlock;
 
-    const singleLineImports = `{ ${imports.join(', ')} }`;
-    const singleLineResult = `import ${singleLineImports} from ${fromPart}`;
+    const namedImportsSingleLine = `{ ${imports.join(', ')} }`;
+    const clauseParts = [beforeNamed, namedImportsSingleLine, afterNamed].filter(Boolean);
+    const importKeyword = parsedImport.isTypeOnly ? 'import type' : 'import';
+    const singleLineResult =
+      `${importKeyword} ${clauseParts.join(', ')} from ${parsedImport.quote}${parsedImport.source}${parsedImport.quote}` +
+      `${parsedImport.hasSemicolon ? ';' : ''}`;
 
-    const formattedImports =
+    const formattedNamedImports =
       singleLineResult.length > config.maxLineLength
         ? `{\n${config.indent}${imports.join(`,\n${config.indent}`)},\n}`
-        : singleLineImports;
+        : namedImportsSingleLine;
 
-    return `import ${formattedImports} from ${fromPart}`;
+    const formattedClause = [beforeNamed, formattedNamedImports, afterNamed]
+      .filter(Boolean)
+      .join(', ');
+
+    return (
+      `${importKeyword} ${formattedClause} from ` +
+      `${parsedImport.quote}${parsedImport.source}${parsedImport.quote}` +
+      `${parsedImport.hasSemicolon ? ';' : ''}`
+    );
   }
 
   private isExternalLib(source: string, aliasPrefixes: string[]): boolean {
@@ -485,21 +872,34 @@ export class SortImportsProvider {
     groups: ImportGroups,
     config: SortConfig
   ): string {
-    const blocks: string[] = [];
     const rest = lines.slice(startIdx).join('\n').trim();
+    const parts: string[] = [];
+    let pendingBlankLine = false;
 
     for (const group of config.groupsOrder) {
+      if (group === '__separator__') {
+        pendingBlankLine = parts.length > 0;
+        continue;
+      }
+
       const block = this.getGroupBlock(group, groups, config);
       if (block) {
-        blocks.push(block);
+        if (parts.length > 0) {
+          parts.push(pendingBlankLine ? '\n\n' : '\n');
+        }
+        parts.push(block);
+        pendingBlankLine = false;
       }
     }
 
     if (rest) {
-      blocks.push(rest);
+      if (parts.length > 0) {
+        parts.push(pendingBlankLine ? '\n\n' : '\n');
+      }
+      parts.push(rest);
     }
 
-    return blocks.join('\n\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+    return parts.join('').replace(/\n{3,}/g, '\n\n').trim() + '\n';
   }
 
   private compareStrings(
@@ -512,6 +912,127 @@ export class SortImportsProvider {
     }
 
     return a.length - b.length || a.localeCompare(b, undefined, { sensitivity: 'base' });
+  }
+
+  private parseImportBlock(block: string): ParsedImportBlock | null {
+    const sideEffectMatch = block.match(/^import\s+['"]([^'"]+)['"]\s*;?$/);
+    if (sideEffectMatch) {
+      return {
+        source: sideEffectMatch[1],
+        quote: block.includes('"') ? '"' : "'",
+        importClause: null,
+        isTypeOnly: false,
+        hasSemicolon: /;\s*$/.test(block),
+      };
+    }
+
+    const match = block.match(/^import\s+(type\s+)?(.+?)\s+from\s+(['"])([^'"]+)\3\s*(;)?$/);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      source: match[4],
+      quote: match[3],
+      importClause: match[2].trim(),
+      isTypeOnly: Boolean(match[1]),
+      hasSemicolon: Boolean(match[5]),
+    };
+  }
+
+  private findNamedImportsRange(
+    importClause: string
+  ): { openBraceIdx: number; closeBraceIdx: number } | null {
+    const openBraceIdx = importClause.indexOf('{');
+    if (openBraceIdx === -1) {
+      return null;
+    }
+
+    const closeBraceIdx = this.findMatchingBraceIndex(importClause, openBraceIdx);
+    if (closeBraceIdx === -1) {
+      return null;
+    }
+
+    return { openBraceIdx, closeBraceIdx };
+  }
+
+  private parseNamedImports(specifiersBlock: string): Array<{ raw: string; sortKey: string }> {
+    return specifiersBlock
+      .split(',')
+      .map((specifier) => specifier.trim())
+      .filter(Boolean)
+      .map((specifier) => ({
+        raw: specifier,
+        sortKey: specifier.replace(/^type\s+/i, '').trim(),
+      }));
+  }
+
+  private getNamedImportSortKey(
+    specifier: { raw: string; sortKey: string },
+    mode: 'length' | 'alphabetical'
+  ): string {
+    if (mode === 'alphabetical') {
+      return specifier.sortKey;
+    }
+
+    return specifier.raw;
+  }
+
+  private compareImportStatements(
+    a: string,
+    b: string,
+    mode: 'length' | 'alphabetical'
+  ): number {
+    const parsedA = this.parseImportBlock(a.replace(/\s+/g, ' ').trim());
+    const parsedB = this.parseImportBlock(b.replace(/\s+/g, ' ').trim());
+
+    if (!parsedA || !parsedB) {
+      return this.compareStrings(a, b, mode);
+    }
+
+    if (mode === 'alphabetical') {
+      return (
+        parsedA.source.localeCompare(parsedB.source, undefined, { sensitivity: 'base' }) ||
+        this.getTypeImportRank(parsedA.isTypeOnly) - this.getTypeImportRank(parsedB.isTypeOnly) ||
+        this.compareImportClausesAlphabetically(parsedA.importClause, parsedB.importClause)
+      );
+    }
+
+    return this.compareStrings(a, b, mode);
+  }
+
+  private compareImportClausesAlphabetically(
+    a: string | null,
+    b: string | null
+  ): number {
+    const rankA = this.getImportClauseRank(a);
+    const rankB = this.getImportClauseRank(b);
+
+    return (
+      rankA - rankB ||
+      (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
+    );
+  }
+
+  private getTypeImportRank(isTypeOnly: boolean): number {
+    return isTypeOnly ? 0 : 1;
+  }
+
+  private getImportClauseRank(importClause: string | null): number {
+    if (!importClause) {
+      return 3;
+    }
+
+    const trimmed = importClause.trim();
+    if (!trimmed) {
+      return 3;
+    }
+
+    if (trimmed.includes('{')) {
+      return trimmed.startsWith('{') ? 1 : 0;
+    }
+
+    return 0;
   }
 
   private normalizeStyleExtensions(extensions: string[]): string[] {
@@ -532,20 +1053,35 @@ export class SortImportsProvider {
     return [...normalized];
   }
 
-  private normalizeGroupsOrder(groupsOrder: string[]): GroupKey[] {
+  private normalizeGroupsOrder(groupsOrder: string[]): GroupOrderItem[] {
     const valid = new Set<GroupKey>(DEFAULT_GROUP_ORDER);
-    const result: GroupKey[] = [];
+    const result: GroupOrderItem[] = [];
+    const usedGroups = new Set<GroupKey>();
 
     for (const group of groupsOrder) {
-      if (valid.has(group as GroupKey) && !result.includes(group as GroupKey)) {
-        result.push(group as GroupKey);
+      const trimmed = group.trim();
+
+      if (trimmed === 'spacing') {
+        if (result.length > 0 && result[result.length - 1] !== '__separator__') {
+          result.push('__separator__');
+        }
+        continue;
+      }
+
+      if (valid.has(trimmed as GroupKey) && !usedGroups.has(trimmed as GroupKey)) {
+        result.push(trimmed as GroupKey);
+        usedGroups.add(trimmed as GroupKey);
       }
     }
 
     for (const defaultGroup of DEFAULT_GROUP_ORDER) {
-      if (!result.includes(defaultGroup)) {
+      if (!usedGroups.has(defaultGroup)) {
         result.push(defaultGroup);
       }
+    }
+
+    while (result[result.length - 1] === '__separator__') {
+      result.pop();
     }
 
     return result;
@@ -562,7 +1098,9 @@ export class SortImportsProvider {
     config: SortConfig
   ): string | null {
     const sortByMode = (a: string, b: string) =>
-      this.compareStrings(a, b, config.sortMode);
+      config.sortMode === 'alphabetical'
+        ? this.compareImportStatements(a, b, config.sortMode)
+        : this.compareStrings(a, b, config.sortMode);
     const sortByLength = (a: string, b: string) => this.compareStrings(a, b, 'length');
 
     switch (group) {
