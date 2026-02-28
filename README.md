@@ -12,6 +12,7 @@ Sort Imports rewrites the top import section of a file into a predictable layout
 
 - Groups imports by category
 - Sorts each group by `length` or `alphabetical`
+- Merges compatible duplicate imports from the same source
 - Sorts named imports inside `{ ... }`
 - Preserves standalone comments collected from the import section
 - Supports `import type`
@@ -33,16 +34,17 @@ Current patch highlights in `0.0.2`:
 ## Features
 
 - 🚀 **Smart Sorting:** Imports are grouped by type and sorted by length
+- 🔀 **Duplicate Merge:** Compatible imports from the same source are combined
 - 💬 **Comment Preservation:** Comments within import blocks are preserved in their original order
 - 🔧 **Structured Type Sorting:** Interface properties and object-shaped type members are sorted inside the declaration body
 - ⚡ **Function Extraction:** Functions and constants are extracted from import blocks and placed after
 - ⚙️ **Configurable:** Ability to change maximum line length and path aliases
 - 🔤 **Sorting Modes:** `length` (default) or `alphabetical`
-- ⌨️ **Keyboard Shortcuts:** Ctrl+Alt+O (Windows/Linux) or Cmd+Alt+O (macOS)
 - 📝 **Context Menu:** Command available in editor context menu
 - 🎯 **Format Provider:** Works as a formatting provider
 - 💡 **Code Action:** Quick Fix / Source Action `Sort Imports`
 - 💾 **Sort On Save:** Optional automatic sorting on file save
+- 👀 **Preview Diff:** Review changes in a side-by-side diff before applying them
 
 ## Import Grouping
 
@@ -63,12 +65,29 @@ Use `spacing` in `sortImports.groupsOrder` to insert blank lines exactly where y
 
 ## Commands and Entry Points
 
+> [!TIP]
+> **Fastest way to use the extension**
+>
+> - **Apply Sort Imports**
+>   - macOS: `Cmd+Alt+O`
+>   - Windows/Linux: `Ctrl+Alt+O`
+> - **Preview Sort Imports**
+>   - macOS: `Cmd+Alt+I`
+>   - Windows/Linux: `Ctrl+Alt+I`
+>
+> Recommended flow:
+> `Preview Sort Imports` -> check the diff -> `Apply Sort Imports`
+
 - Command palette: `Sort Imports`
+- Command palette: `Apply Sort Imports`
+- Command palette: `Preview Sort Imports`
 - Editor context menu: `Sort Imports`
-- Keyboard shortcut: `Ctrl+Alt+O` on Windows/Linux, `Cmd+Alt+O` on macOS
+- Editor context menu: `Apply Sort Imports`
+- Editor context menu: `Preview Sort Imports`
 - Formatter: available as a document formatting provider
 - Code actions: `Quick Fix` and `Source: Sort Imports`
 - Save hook: enabled with `sortImports.sortOnSave`
+- Diff preview: opens a side-by-side preview before applying changes
 
 ## Settings
 
@@ -186,6 +205,15 @@ More explicit setup with custom group spacing:
 }
 ```
 
+## Preview Before Apply
+
+Use `Preview Sort Imports` from the Command Palette, editor context menu, or keyboard shortcut to open a VS Code diff view:
+
+- Left side: your current file
+- Right side: the sorted result preview
+
+If no changes are needed, the extension shows `No import changes were needed.`
+
 ## Demo
 
 ![Sort Imports Demo](./demo.gif)
@@ -200,6 +228,7 @@ import { Component } from 'react';
 // Comment about utils
 import { someUtilFunction, anotherFunction } from '../utils/helpers';
 import axios from 'axios';
+import { getProfile } from '@/services/api';
 /* Comment about API service */
 import { apiCall } from '@/services/api';
 import lodash from 'lodash';
@@ -221,7 +250,7 @@ import { Component } from 'react';
 import axios from 'axios';
 import lodash from 'lodash';
 
-import { apiCall } from '@/services/api';
+import { apiCall, getProfile } from '@/services/api';
 
 import { someUtilFunction, anotherFunction } from '../utils/helpers';
 
@@ -242,9 +271,11 @@ interface User {
 ## Usage
 
 1. Open a `.js`, `.ts`, `.jsx`, or `.tsx` file.
-2. Run **Sort Imports** from the command palette, editor context menu, or keyboard shortcut.
-3. Optionally enable `"sortImports.sortOnSave": true` to apply sorting automatically on save.
-4. Optionally use the extension as a formatter or from the `Source` / `Quick Fix` code actions.
+2. Press `Cmd+Alt+I` on macOS or `Ctrl+Alt+I` on Windows/Linux to preview the result in diff view.
+3. Press `Cmd+Alt+O` on macOS or `Ctrl+Alt+O` on Windows/Linux to apply the sorted imports.
+4. You can also run **Apply Sort Imports** or **Preview Sort Imports** from the command palette or editor context menu.
+5. Optionally enable `"sortImports.sortOnSave": true` to apply sorting automatically on save.
+6. Optionally use the extension as a formatter or from the `Source` / `Quick Fix` code actions.
 
 ## Supported Files
 

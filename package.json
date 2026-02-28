@@ -4,7 +4,7 @@
   "displayName": "Automatic Import Sorter",
   "description": "Automatically sort and organize JavaScript/TypeScript imports with smart grouping and configurable modes",
   "license": "MIT",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -35,13 +35,29 @@
         "command": "sortImports.sortImports",
         "title": "Sort Imports",
         "category": "Sort Imports"
+      },
+      {
+        "command": "sortImports.applySortImports",
+        "title": "Apply Sort Imports",
+        "category": "Sort Imports"
+      },
+      {
+        "command": "sortImports.previewSortImports",
+        "title": "Preview Sort Imports",
+        "category": "Sort Imports"
       }
     ],
     "keybindings": [
       {
-        "command": "sortImports.sortImports",
+        "command": "sortImports.applySortImports",
         "key": "ctrl+alt+o",
         "mac": "cmd+alt+o",
+        "when": "editorTextFocus && (resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx)"
+      },
+      {
+        "command": "sortImports.previewSortImports",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
         "when": "editorTextFocus && (resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx)"
       }
     ],
@@ -51,11 +67,29 @@
           "command": "sortImports.sortImports",
           "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx",
           "group": "1_modification@1"
+        },
+        {
+          "command": "sortImports.applySortImports",
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx",
+          "group": "1_modification@2"
+        },
+        {
+          "command": "sortImports.previewSortImports",
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx",
+          "group": "1_modification@3"
         }
       ],
       "commandPalette": [
         {
           "command": "sortImports.sortImports",
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx"
+        },
+        {
+          "command": "sortImports.applySortImports",
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx"
+        },
+        {
+          "command": "sortImports.previewSortImports",
           "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx"
         }
       ]
