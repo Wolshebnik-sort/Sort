@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, adapted for the current extension workflow.
 
+## [0.0.4] - 2026-02-28
+
+### Added
+
+- A `sortImports.mergeDuplicateImports` setting to control whether compatible duplicate imports are merged during sorting.
+- A `sortImports.detectAliasesFromProjectConfig` setting to auto-detect alias prefixes from nearby `tsconfig.json` / `jsconfig.json` files and simple Vite or webpack alias definitions when enabled.
+
+### Changed
+
+- Duplicate-import merging remains enabled by default, but can now be disabled per user or workspace settings.
+- Alias resolution now combines manual prefixes, detected project aliases, and the built-in defaults in a stable order.
+- Imports from groups omitted in `sortImports.groupsOrder` now stay in place instead of being moved to the bottom of the section.
+- Updated the README to explain project-specific configuration via `./.vscode/settings.json` and how different projects can use different sorting rules.
+
 ## [0.0.3] - 2026-02-28
 
 ### Added

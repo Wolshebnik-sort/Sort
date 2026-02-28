@@ -4,7 +4,7 @@
   "displayName": "Automatic Import Sorter",
   "description": "Automatically sort and organize JavaScript/TypeScript imports with smart grouping and configurable modes",
   "license": "MIT",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -116,6 +116,11 @@
           ],
           "description": "Prefixes that should be treated as absolute imports"
         },
+        "sortImports.detectAliasesFromProjectConfig": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically detect alias prefixes from nearby tsconfig/jsconfig files and simple vite/webpack alias definitions"
+        },
         "sortImports.styleExtensions": {
           "type": "array",
           "default": [
@@ -180,6 +185,11 @@
           ],
           "default": "length",
           "description": "Sorting mode for imports and named specifiers: by length (default) or alphabetically"
+        },
+        "sortImports.mergeDuplicateImports": {
+          "type": "boolean",
+          "default": true,
+          "description": "Merge compatible duplicate imports from the same source while sorting"
         }
       }
     }

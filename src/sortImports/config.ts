@@ -7,21 +7,33 @@ import {
   GroupOrderItem,
   SortConfig,
 } from './types';
+import { resolveAliasPrefixes } from './projectAliasResolver';
 
-export function getSortConfig(): SortConfig {
-  const config = vscode.workspace.getConfiguration('sortImports');
+export function getSortConfig(documentUri?: vscode.Uri): SortConfig {
+  const config = vscode.workspace.getConfiguration('sortImports', documentUri);
   const styleExtensions = normalizeStyleExtensions(
     config.get<string[]>('styleExtensions', ['.css', '.scss', '.sass', '.less'])
   );
   const groupsOrder = normalizeGroupsOrder(
     config.get<string[]>('groupsOrder', DEFAULT_GROUP_ORDER_WITH_SEPARATORS)
   );
+  const detectAliasesFromProjectConfig = config.get<boolean>(
+    'detectAliasesFromProjectConfig',
+    false
+  );
+  const manualAliasPrefixes = config.get<string[]>('aliasPrefixes', ['@/', '~/', 'src/']);
 
   return {
     maxLineLength: config.get<number>('maxLineLength', 100),
     indent: config.get<string>('indentSize', '  '),
-    aliasPrefixes: config.get<string[]>('aliasPrefixes', ['@/', '~/', 'src/']),
+    aliasPrefixes: resolveAliasPrefixes(
+      documentUri,
+      manualAliasPrefixes,
+      detectAliasesFromProjectConfig
+    ),
+    detectAliasesFromProjectConfig,
     sortMode: config.get<'length' | 'alphabetical'>('sortMode', 'length'),
+    mergeDuplicateImports: config.get<boolean>('mergeDuplicateImports', true),
     styleExtensions,
     groupsOrder,
   };
@@ -63,12 +75,6 @@ function normalizeGroupsOrder(groupsOrder: string[]): GroupOrderItem[] {
     if (valid.has(trimmed as GroupKey) && !usedGroups.has(trimmed as GroupKey)) {
       result.push(trimmed as GroupKey);
       usedGroups.add(trimmed as GroupKey);
-    }
-  }
-
-  for (const defaultGroup of DEFAULT_GROUP_ORDER) {
-    if (!usedGroups.has(defaultGroup)) {
-      result.push(defaultGroup);
     }
   }
 
