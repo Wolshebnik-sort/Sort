@@ -1,4 +1,4 @@
-import { ImportGroups, ParsedImportBlock, SortConfig } from './types';
+import { ImportGroupKey, ImportGroups, ParsedImportBlock, SortConfig } from './types';
 import { StructuredTypeSorter } from './structuredTypeSorter';
 
 const structuredTypeSorter = new StructuredTypeSorter();
@@ -34,44 +34,29 @@ export function sortTypeMembers(block: string, config: SortConfig): string {
   return structuredTypeSorter.sort(block, config);
 }
 
-export function classifyImport(
-  block: string,
-  groups: ImportGroups,
-  config: SortConfig
-): void {
+export function getImportGroup(block: string, config: SortConfig): ImportGroupKey | null {
   const normalizedBlock = block.replace(/\s+/g, ' ').trim();
-  const sideEffectMatch = normalizedBlock.match(/^import\s+['"]([^'"]+)['"]\s*;?$/);
-
-  if (sideEffectMatch) {
-    const source = sideEffectMatch[1];
-    if (isStyleImport(source, config.styleExtensions)) {
-      groups.styles.push(formatImportBlock(block, config));
-    } else {
-      groups.sideEffect.push(formatImportBlock(block, config));
-    }
-    return;
+  const source = getImportSource(normalizedBlock);
+  if (!source) {
+    return null;
   }
 
-  const sourceMatch = normalizedBlock.match(/\bfrom\s+['"]([^'"]+)['"]\s*;?$/);
-  if (!sourceMatch) {
-    return;
+  if (isSideEffectImport(normalizedBlock)) {
+    return isStyleImport(source, config.styleExtensions) ? 'styles' : 'sideEffect';
   }
-
-  const source = sourceMatch[1];
-  const formatted = formatImportBlock(block, config);
 
   if (isStyleImport(source, config.styleExtensions)) {
-    groups.styles.push(formatted);
+    return 'styles';
   } else if (source === 'react' || source.startsWith('react/')) {
-    groups.react.push(formatted);
+    return 'react';
   } else if (isAliasImport(source, config.aliasPrefixes)) {
-    groups.absolute.push(formatted);
+    return 'absolute';
   } else if (source.startsWith('.') || source.startsWith('/')) {
-    groups.relative.push(formatted);
+    return 'relative';
   } else if (isExternalLib(source, config.aliasPrefixes)) {
-    groups.libraries.push(formatted);
+    return 'libraries';
   } else {
-    groups.absolute.push(formatted);
+    return 'absolute';
   }
 }
 
@@ -244,6 +229,20 @@ export function parseImportBlock(block: string): ParsedImportBlock | null {
     isTypeOnly: Boolean(match[1]),
     hasSemicolon: Boolean(match[5]),
   };
+}
+
+function getImportSource(block: string): string | null {
+  const sideEffectMatch = block.match(/^import\s+['"]([^'"]+)['"]\s*;?$/);
+  if (sideEffectMatch) {
+    return sideEffectMatch[1];
+  }
+
+  const sourceMatch = block.match(/\bfrom\s+['"]([^'"]+)['"]\s*;?$/);
+  return sourceMatch?.[1] ?? null;
+}
+
+function isSideEffectImport(block: string): boolean {
+  return /^import\s+['"]([^'"]+)['"]\s*;?$/.test(block);
 }
 
 function isExternalLib(source: string, aliasPrefixes: string[]): boolean {

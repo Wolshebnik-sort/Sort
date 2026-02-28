@@ -99,6 +99,7 @@ Use `spacing` in `sortImports.groupsOrder` to insert blank lines exactly where y
   "sortImports.maxLineLength": 100,
   "sortImports.indentSize": "  ",
   "sortImports.aliasPrefixes": ["@/", "~/", "src/"],
+  "sortImports.detectAliasesFromProjectConfig": false,
   "sortImports.styleExtensions": [".css", ".scss", ".sass", ".less"],
   "sortImports.groupsOrder": [
     "directives",
@@ -122,7 +123,8 @@ Use `spacing` in `sortImports.groupsOrder` to insert blank lines exactly where y
     "functions"
   ],
   "sortImports.sortOnSave": false,
-  "sortImports.sortMode": "length"
+  "sortImports.sortMode": "length",
+  "sortImports.mergeDuplicateImports": true
 }
 ```
 
@@ -135,6 +137,7 @@ To override and extend settings, add only the values you want to change in your 
   "sortImports.maxLineLength": 120,
   "sortImports.sortOnSave": true,
   "sortImports.styleExtensions": [".css", ".scss", ".sass", ".less", ".pcss"],
+  "sortImports.detectAliasesFromProjectConfig": true,
   "sortImports.groupsOrder": [
     "directives",
     "spacing",
@@ -151,7 +154,8 @@ To override and extend settings, add only the values you want to change in your 
     "functions"
   ],
   "sortImports.aliasPrefixes": ["@/", "~/", "src/", "@core/", "@shared/"],
-  "sortImports.sortMode": "alphabetical"
+  "sortImports.sortMode": "alphabetical",
+  "sortImports.mergeDuplicateImports": true
 }
 ```
 
@@ -159,12 +163,57 @@ Notes:
 - `sortImports.maxLineLength`: maximum line length before wrapping imports.
 - `sortImports.indentSize`: indentation used for wrapped import lines.
 - `sortImports.aliasPrefixes`: alias prefixes used to detect absolute imports. Extend this array with your project aliases.
+- `sortImports.detectAliasesFromProjectConfig`: automatically detect aliases from nearby `tsconfig.json`, `jsconfig.json`, referenced TypeScript configs, and simple `vite.config.*` / `webpack.config.*` alias definitions.
 - `sortImports.styleExtensions`: extensions treated as style imports.
-- `sortImports.groupsOrder`: custom output order. Available groups: `directives`, `react`, `libraries`, `absolute`, `relative`, `sideEffect`, `styles`, `interfaces`, `comments`, `functions`. Add `"spacing"` as a separate array item to insert an empty line exactly where you want it.
+- `sortImports.groupsOrder`: custom output order. Available groups: `directives`, `react`, `libraries`, `absolute`, `relative`, `sideEffect`, `styles`, `interfaces`, `comments`, `functions`. Add `"spacing"` as a separate array item to insert an empty line exactly where you want it. If a group is omitted, items from that group stay in place instead of being moved to the bottom.
 - `sortImports.sortOnSave`: automatically sort imports on file save.
 - `sortImports.sortMode`: `length` (default behavior) or `alphabetical`.
+- `sortImports.mergeDuplicateImports`: merge compatible duplicate imports from the same source. Enabled by default.
 - In `length` mode, sorting behavior remains the current default (by length).
 - In `alphabetical` mode, non-React import groups are sorted alphabetically, and named imports inside `{ ... }` are sorted alphabetically.
+
+## Per-Project Configuration
+
+If you want different import rules in different projects, you do not need to change the extension code.
+
+### Where To Put Project Rules
+
+```text
+./.vscode/settings.json
+```
+
+Create this file inside the repository root and add only the `sortImports.*` options you want for that project.
+
+Example:
+
+```json
+{
+  "sortImports.sortMode": "alphabetical",
+  "sortImports.groupsOrder": [
+    "directives",
+    "spacing",
+    "comments",
+    "react",
+    "libraries",
+    "spacing",
+    "absolute",
+    "styles",
+    "spacing",
+    "relative",
+    "sideEffect",
+    "interfaces",
+    "functions"
+  ]
+}
+```
+
+This makes it possible to use one configuration in project A and a different configuration in project B.
+
+Notes:
+- User settings apply globally to all projects.
+- `.vscode/settings.json` applies only to the current project.
+- If the same `sortImports.*` setting exists in both places, the project-level `.vscode/settings.json` value wins.
+- If you commit `.vscode/settings.json`, the rest of the team will get the same project rules.
 
 ## Example Configuration
 
@@ -175,6 +224,30 @@ Minimal setup:
   "sortImports.sortOnSave": true
 }
 ```
+
+Disable duplicate-import merging:
+
+```json
+{
+  "sortImports.mergeDuplicateImports": false
+}
+```
+
+Enable project alias auto-detection:
+
+```json
+{
+  "sortImports.detectAliasesFromProjectConfig": true
+}
+```
+
+When enabled, the extension combines:
+
+- aliases from `sortImports.aliasPrefixes`
+- aliases detected from nearby project config files
+- built-in defaults like `@/`, `~/`, and `src/`
+
+If no project config is found, the extension falls back to your manual aliases and the default prefixes.
 
 More explicit setup with custom group spacing:
 

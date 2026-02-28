@@ -9,13 +9,18 @@ import {
 } from './sortImports/blockCollectors';
 import { getSortConfig } from './sortImports/config';
 import {
-  classifyImport,
   compareImportStatements,
   compareStrings,
+  formatImportBlock,
+  getImportGroup,
   mergeImportStatements,
   sortTypeMembers,
 } from './sortImports/importFormatting';
-import { GroupKey, ImportGroups, SortConfig } from './sortImports/types';
+import { GroupKey, GroupOrderItem, ImportGroups, SortConfig } from './sortImports/types';
+
+type RawSectionPart = { type: 'raw'; value: string };
+type ConfiguredSectionPart = { type: 'configured'; groups: ImportGroups };
+type SectionPart = RawSectionPart | ConfiguredSectionPart;
 
 export class SortImportsProvider {
   public async sortImports(editor: vscode.TextEditor): Promise<boolean> {
@@ -54,17 +59,220 @@ export class SortImportsProvider {
   }
 
   public getSortedContent(document: vscode.TextDocument): string {
-    return this.processContent(document.getText(), getSortConfig());
+    return this.processContent(document.getText(), getSortConfig(document.uri));
   }
 
   private processContent(content: string, config: SortConfig): string {
     const lines = content.split(/\r?\n/);
-    const groups = this.createEmptyGroups();
+    const configuredGroups = this.getConfiguredGroups(config.groupsOrder);
+    const sectionParts: SectionPart[] = [];
+    let currentConfiguredPart: ConfiguredSectionPart | null = null;
+    let commentIndex = 0;
+    let idx = 0;
 
-    const startIdx = this.processDirectives(lines, groups);
-    const nextIdx = this.processImports(lines, startIdx, groups, config);
+    while (lines[idx]?.trim() === '') {
+      idx++;
+    }
 
-    return this.buildResult(lines, nextIdx, groups, config);
+    while (idx < lines.length) {
+      const line = lines[idx].trim();
+
+      if (!line) {
+        idx++;
+        continue;
+      }
+
+      const directive = line.match(/^['"](use (?:client|server))['"]\.?;?$/i);
+      if (directive) {
+        currentConfiguredPart = this.pushSectionEntry(
+          sectionParts,
+          currentConfiguredPart,
+          configuredGroups,
+          'directives',
+          `'${directive[1]}';`
+        );
+        idx++;
+        continue;
+      }
+
+      if (line.startsWith('//') || line.startsWith('/*') || line.startsWith('*')) {
+        currentConfiguredPart = this.pushCommentEntry(
+          sectionParts,
+          currentConfiguredPart,
+          configuredGroups,
+          lines[idx],
+          commentIndex
+        );
+        commentIndex++;
+        idx++;
+        continue;
+      }
+
+      if (line.startsWith('interface ') || line.startsWith('export interface ')) {
+        const interfaceResult = collectBraceBlock(lines, idx);
+        if (!interfaceResult) {
+          break;
+        }
+
+        currentConfiguredPart = this.pushSectionEntry(
+          sectionParts,
+          currentConfiguredPart,
+          configuredGroups,
+          'interfaces',
+          sortTypeMembers(interfaceResult.block, config)
+        );
+        idx = interfaceResult.nextIdx;
+        continue;
+      }
+
+      if (line.startsWith('type ') || line.startsWith('export type ')) {
+        const typeResult = collectTypeBlock(lines, idx);
+        if (!typeResult) {
+          break;
+        }
+
+        currentConfiguredPart = this.pushSectionEntry(
+          sectionParts,
+          currentConfiguredPart,
+          configuredGroups,
+          'interfaces',
+          sortTypeMembers(typeResult.block, config)
+        );
+        idx = typeResult.nextIdx;
+        continue;
+      }
+
+      if (isFunctionLikeStart(line)) {
+        const functionResult = collectFunctionBlock(lines, idx);
+        if (!functionResult) {
+          break;
+        }
+
+        currentConfiguredPart = this.pushSectionEntry(
+          sectionParts,
+          currentConfiguredPart,
+          configuredGroups,
+          'functions',
+          functionResult.block
+        );
+        idx = functionResult.nextIdx;
+        continue;
+      }
+
+      if (!line.startsWith('import')) {
+        break;
+      }
+
+      const importResult = collectImportBlock(lines, idx);
+      if (!importResult) {
+        break;
+      }
+
+      const importGroup = getImportGroup(importResult.block, config);
+      if (!importGroup) {
+        break;
+      }
+
+      const blockValue = configuredGroups.has(importGroup)
+        ? formatImportBlock(importResult.block, config)
+        : importResult.block;
+
+      currentConfiguredPart = this.pushSectionEntry(
+        sectionParts,
+        currentConfiguredPart,
+        configuredGroups,
+        importGroup,
+        blockValue
+      );
+      idx = importResult.nextIdx;
+    }
+
+    if (currentConfiguredPart) {
+      sectionParts.push(currentConfiguredPart);
+    }
+
+    const rest = lines.slice(idx).join('\n').trim();
+    const renderedParts = sectionParts
+      .map((part) =>
+        part.type === 'raw' ? part.value : this.buildConfiguredPart(part.groups, config)
+      )
+      .filter(Boolean);
+    const section = renderedParts.reduce((result, part, index) => {
+      if (index === 0) {
+        return part;
+      }
+
+      const previousPart = sectionParts[index - 1];
+      const currentPart = sectionParts[index];
+      const separator =
+        previousPart?.type === 'raw' && currentPart?.type === 'raw' ? '\n' : '\n\n';
+
+      return `${result}${separator}${part}`;
+    }, '');
+
+    if (!section && !rest) {
+      return '\n';
+    }
+
+    if (!section) {
+      return `${rest}\n`;
+    }
+
+    if (!rest) {
+      return `${section}\n`;
+    }
+
+    return `${section}\n\n${rest}`.replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  }
+
+  private pushSectionEntry(
+    sectionParts: SectionPart[],
+    currentConfiguredPart: ConfiguredSectionPart | null,
+    configuredGroups: Set<GroupKey>,
+    group: Exclude<GroupKey, 'comments'>,
+    value: string
+  ): ConfiguredSectionPart | null {
+    if (!configuredGroups.has(group)) {
+      if (currentConfiguredPart) {
+        sectionParts.push(currentConfiguredPart);
+      }
+
+      sectionParts.push({ type: 'raw', value });
+      return null;
+    }
+
+    const configuredPart = currentConfiguredPart ?? {
+      type: 'configured' as const,
+      groups: this.createEmptyGroups(),
+    };
+
+    configuredPart.groups[group].push(value);
+    return configuredPart;
+  }
+
+  private pushCommentEntry(
+    sectionParts: SectionPart[],
+    currentConfiguredPart: ConfiguredSectionPart | null,
+    configuredGroups: Set<GroupKey>,
+    line: string,
+    originalIndex: number
+  ): ConfiguredSectionPart | null {
+    if (!configuredGroups.has('comments')) {
+      if (currentConfiguredPart) {
+        sectionParts.push(currentConfiguredPart);
+      }
+
+      sectionParts.push({ type: 'raw', value: line });
+      return null;
+    }
+
+    const configuredPart = currentConfiguredPart ?? {
+      type: 'configured' as const,
+      groups: this.createEmptyGroups(),
+    };
+
+    configuredPart.groups.comments.push({ line, originalIndex });
+    return configuredPart;
   }
 
   private createEmptyGroups(): ImportGroups {
@@ -82,101 +290,13 @@ export class SortImportsProvider {
     };
   }
 
-  private processDirectives(lines: string[], groups: ImportGroups): number {
-    for (let i = 0; i < lines.length; i++) {
-      const directive = lines[i].trim().match(/^['"](use (?:client|server))['"]\.?;?$/i);
-      if (directive) {
-        groups.directives.push(`'${directive[1]}';`);
-        lines[i] = '';
-      }
-    }
-
-    let idx = 0;
-    while (lines[idx]?.trim() === '') {
-      idx++;
-    }
-
-    return idx;
+  private getConfiguredGroups(groupsOrder: GroupOrderItem[]): Set<GroupKey> {
+    return new Set(
+      groupsOrder.filter((group): group is GroupKey => group !== '__separator__')
+    );
   }
 
-  private processImports(
-    lines: string[],
-    startIdx: number,
-    groups: ImportGroups,
-    config: SortConfig
-  ): number {
-    let idx = startIdx;
-
-    while (idx < lines.length) {
-      const line = lines[idx].trim();
-
-      if (!line) {
-        idx++;
-        continue;
-      }
-
-      if (line.startsWith('//') || line.startsWith('/*') || line.startsWith('*')) {
-        groups.comments.push({ line: lines[idx], originalIndex: idx });
-        idx++;
-        continue;
-      }
-
-      if (line.startsWith('interface ') || line.startsWith('export interface ')) {
-        const interfaceResult = collectBraceBlock(lines, idx);
-        if (!interfaceResult) {
-          break;
-        }
-
-        groups.interfaces.push(sortTypeMembers(interfaceResult.block, config));
-        idx = interfaceResult.nextIdx;
-        continue;
-      }
-
-      if (line.startsWith('type ') || line.startsWith('export type ')) {
-        const typeResult = collectTypeBlock(lines, idx);
-        if (!typeResult) {
-          break;
-        }
-
-        groups.interfaces.push(sortTypeMembers(typeResult.block, config));
-        idx = typeResult.nextIdx;
-        continue;
-      }
-
-      if (isFunctionLikeStart(line)) {
-        const functionResult = collectFunctionBlock(lines, idx);
-        if (!functionResult) {
-          break;
-        }
-
-        groups.functions.push(functionResult.block);
-        idx = functionResult.nextIdx;
-        continue;
-      }
-
-      if (!line.startsWith('import')) {
-        break;
-      }
-
-      const importResult = collectImportBlock(lines, idx);
-      if (!importResult) {
-        break;
-      }
-
-      classifyImport(importResult.block, groups, config);
-      idx = importResult.nextIdx;
-    }
-
-    return idx;
-  }
-
-  private buildResult(
-    lines: string[],
-    startIdx: number,
-    groups: ImportGroups,
-    config: SortConfig
-  ): string {
-    const rest = lines.slice(startIdx).join('\n').trim();
+  private buildConfiguredPart(groups: ImportGroups, config: SortConfig): string {
     const parts: string[] = [];
     let pendingBlankLine = false;
 
@@ -199,14 +319,7 @@ export class SortImportsProvider {
       pendingBlankLine = false;
     }
 
-    if (rest) {
-      if (parts.length > 0) {
-        parts.push(pendingBlankLine ? '\n\n' : '\n');
-      }
-      parts.push(rest);
-    }
-
-    return parts.join('').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+    return parts.join('');
   }
 
   private getGroupBlock(
@@ -214,13 +327,15 @@ export class SortImportsProvider {
     groups: ImportGroups,
     config: SortConfig
   ): string | null {
-    const mergeAndSort = (items: string[]) =>
-      mergeImportStatements(items, config).sort(sortByMode).join('\n');
+    const prepareImports = (items: string[]) =>
+      config.mergeDuplicateImports ? mergeImportStatements(items, config) : [...items];
     const sortByMode = (a: string, b: string) =>
       config.sortMode === 'alphabetical'
         ? compareImportStatements(a, b, config.sortMode)
         : compareStrings(a, b, config.sortMode);
     const sortByLength = (a: string, b: string) => compareStrings(a, b, 'length');
+    const mergeAndSort = (items: string[]) =>
+      prepareImports(items).sort(sortByMode).join('\n');
 
     switch (group) {
       case 'directives':
@@ -231,7 +346,7 @@ export class SortImportsProvider {
         }
         return config.sortMode === 'alphabetical'
           ? mergeAndSort(groups.react)
-          : mergeImportStatements(groups.react, config).sort(sortByLength).join('\n');
+          : prepareImports(groups.react).sort(sortByLength).join('\n');
       case 'libraries':
         return groups.libraries.length ? mergeAndSort(groups.libraries) : null;
       case 'absolute':

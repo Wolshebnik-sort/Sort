@@ -23,6 +23,14 @@ export type GroupKey =
   | 'comments'
   | 'functions';
 
+export type ImportGroupKey =
+  | 'react'
+  | 'libraries'
+  | 'absolute'
+  | 'relative'
+  | 'sideEffect'
+  | 'styles';
+
 export type GroupOrderItem = GroupKey | '__separator__';
 
 export const DEFAULT_GROUP_ORDER: GroupKey[] = [
@@ -64,7 +72,9 @@ export interface SortConfig {
   maxLineLength: number;
   indent: string;
   aliasPrefixes: string[];
+  detectAliasesFromProjectConfig: boolean;
   sortMode: 'length' | 'alphabetical';
+  mergeDuplicateImports: boolean;
   styleExtensions: string[];
   groupsOrder: GroupOrderItem[];
 }
