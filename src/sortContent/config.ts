@@ -1,27 +1,34 @@
 import * as vscode from 'vscode';
 
 import {
+  DEFAULT_ALIAS_PREFIXES,
   DEFAULT_GROUP_ORDER,
   DEFAULT_GROUP_ORDER_WITH_SEPARATORS,
-  GroupKey,
-  GroupOrderItem,
-  SortConfig,
-} from './types';
+  DEFAULT_STYLE_EXTENSIONS,
+  DEFAULT_STYLE_GROUP_ORDER,
+} from './defaults';
 import { resolveAliasPrefixes } from './projectAliasResolver';
+import { GroupKey, SortConfig, GroupOrderItem } from './types';
+import { StyleGroupKey } from './style/types';
 
 export function getSortConfig(documentUri?: vscode.Uri): SortConfig {
   const config = vscode.workspace.getConfiguration('sortImports', documentUri);
   const styleExtensions = normalizeStyleExtensions(
-    config.get<string[]>('styleExtensions', ['.css', '.scss', '.sass', '.less'])
+    config.get<string[]>('styleExtensions', DEFAULT_STYLE_EXTENSIONS),
   );
   const groupsOrder = normalizeGroupsOrder(
-    config.get<string[]>('groupsOrder', DEFAULT_GROUP_ORDER_WITH_SEPARATORS)
+    config.get<string[]>('groupsOrder', DEFAULT_GROUP_ORDER_WITH_SEPARATORS),
+  );
+  const styleGroupsOrder = normalizeStyleGroupsOrder(
+    config.get<string[]>('styleGroupsOrder', DEFAULT_STYLE_GROUP_ORDER),
   );
   const detectAliasesFromProjectConfig = config.get<boolean>(
     'detectAliasesFromProjectConfig',
-    false
+    false,
   );
-  const manualAliasPrefixes = config.get<string[]>('aliasPrefixes', ['@/', '~/', 'src/']);
+  const manualAliasPrefixes = config.get<string[]>('aliasPrefixes', [
+    ...DEFAULT_ALIAS_PREFIXES,
+  ]);
 
   return {
     maxLineLength: config.get<number>('maxLineLength', 100),
@@ -29,12 +36,14 @@ export function getSortConfig(documentUri?: vscode.Uri): SortConfig {
     aliasPrefixes: resolveAliasPrefixes(
       documentUri,
       manualAliasPrefixes,
-      detectAliasesFromProjectConfig
+      detectAliasesFromProjectConfig,
     ),
     detectAliasesFromProjectConfig,
+    enableStyleSorting: config.get<boolean>('enableStyleSorting', false),
     sortMode: config.get<'length' | 'alphabetical'>('sortMode', 'length'),
-    mergeDuplicateImports: config.get<boolean>('mergeDuplicateImports', true),
+    mergeDuplicateImports: config.get<boolean>('mergeDuplicateImports', false),
     styleExtensions,
+    styleGroupsOrder,
     groupsOrder,
   };
 }
@@ -51,7 +60,7 @@ function normalizeStyleExtensions(extensions: string[]): string[] {
   }
 
   if (normalized.size === 0) {
-    return ['.css', '.scss', '.sass', '.less'];
+    return [...DEFAULT_STYLE_EXTENSIONS];
   }
 
   return [...normalized];
@@ -72,7 +81,10 @@ function normalizeGroupsOrder(groupsOrder: string[]): GroupOrderItem[] {
       continue;
     }
 
-    if (valid.has(trimmed as GroupKey) && !usedGroups.has(trimmed as GroupKey)) {
+    if (
+      valid.has(trimmed as GroupKey) &&
+      !usedGroups.has(trimmed as GroupKey)
+    ) {
       result.push(trimmed as GroupKey);
       usedGroups.add(trimmed as GroupKey);
     }
@@ -80,6 +92,27 @@ function normalizeGroupsOrder(groupsOrder: string[]): GroupOrderItem[] {
 
   while (result[result.length - 1] === '__separator__') {
     result.pop();
+  }
+
+  return result;
+}
+
+function normalizeStyleGroupsOrder(groupsOrder: string[]): StyleGroupKey[] {
+  const valid = new Set<StyleGroupKey>(DEFAULT_STYLE_GROUP_ORDER);
+  const result: StyleGroupKey[] = [];
+
+  for (const group of groupsOrder) {
+    const trimmed = group.trim() as StyleGroupKey;
+
+    if (valid.has(trimmed) && !result.includes(trimmed)) {
+      result.push(trimmed);
+    }
+  }
+
+  for (const group of DEFAULT_STYLE_GROUP_ORDER) {
+    if (!result.includes(group)) {
+      result.push(group);
+    }
   }
 
   return result;

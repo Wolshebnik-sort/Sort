@@ -4,6 +4,7 @@
 **/.DS_Store
 
 src/**
+test/**
 tsconfig.json
 package-lock.json
 node_modules/**

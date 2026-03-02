@@ -1,15 +1,10 @@
 import * as vscode from 'vscode';
-import { SortImportsProvider } from './sortImportsProvider';
+import { PREVIEW_SCHEME, SUPPORTED_LANGUAGE_IDS } from './constants';
+import { SortContentProvider } from './sortContentProvider';
 
-const PREVIEW_SCHEME = 'sort-imports-preview';
-const SUPPORTED_LANGUAGES = new Set([
-  'javascript',
-  'typescript',
-  'javascriptreact',
-  'typescriptreact',
-]);
+const SUPPORTED_LANGUAGES = new Set(SUPPORTED_LANGUAGE_IDS);
 
-class SortImportsPreviewProvider implements vscode.TextDocumentContentProvider {
+class SortContentPreviewProvider implements vscode.TextDocumentContentProvider {
   private readonly previews = new Map<string, string>();
   private readonly emitter = new vscode.EventEmitter<vscode.Uri>();
 
@@ -26,27 +21,29 @@ class SortImportsPreviewProvider implements vscode.TextDocumentContentProvider {
 }
 
 function isSupportedLanguage(languageId: string): boolean {
-  return SUPPORTED_LANGUAGES.has(languageId);
+  return SUPPORTED_LANGUAGES.has(
+    languageId as (typeof SUPPORTED_LANGUAGE_IDS)[number]
+  );
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Sort Imports extension is now active!');
+  console.log('Sort Content extension is now active!');
 
-  const provider = new SortImportsProvider();
-  const previewProvider = new SortImportsPreviewProvider();
+  const provider = new SortContentProvider();
+  const previewProvider = new SortContentPreviewProvider();
 
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(PREVIEW_SCHEME, previewProvider)
   );
 
-  // Регистрируем команду для сортировки импортов
+  // Register sorting commands
   const disposable = vscode.commands.registerCommand(
     'sortImports.sortImports',
     async () => {
       try {
-        await runSortImports(provider);
+        await runSortContent(provider);
       } catch (error) {
-        vscode.window.showErrorMessage(`Error sorting imports: ${error}`);
+        vscode.window.showErrorMessage(`Error while sorting content: ${error}`);
       }
     }
   );
@@ -57,9 +54,9 @@ export function activate(context: vscode.ExtensionContext) {
     'sortImports.applySortImports',
     async () => {
       try {
-        await runSortImports(provider);
+        await runSortContent(provider);
       } catch (error) {
-        vscode.window.showErrorMessage(`Error applying sorted imports: ${error}`);
+        vscode.window.showErrorMessage(`Error while applying sorted content: ${error}`);
       }
     }
   );
@@ -78,7 +75,7 @@ export function activate(context: vscode.ExtensionContext) {
       const document = editor.document;
       if (!isSupportedLanguage(document.languageId)) {
         vscode.window.showErrorMessage(
-          'Sort Imports preview only works with JavaScript and TypeScript files'
+          'Sort preview only works with JavaScript, TypeScript, and style files'
         );
         return;
       }
@@ -88,7 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
         const sortedContent = provider.getSortedContent(document);
 
         if (sortedContent === originalContent) {
-          vscode.window.showInformationMessage('No import changes were needed.');
+          vscode.window.showInformationMessage('No sorting changes were needed.');
           return;
         }
 
@@ -105,10 +102,10 @@ export function activate(context: vscode.ExtensionContext) {
           'vscode.diff',
           document.uri,
           previewUri,
-          `Sort Imports Preview: ${fileName}`
+          `Sort Preview: ${fileName}`
         );
       } catch (error) {
-        vscode.window.showErrorMessage(`Error previewing sorted imports: ${error}`);
+        vscode.window.showErrorMessage(`Error while previewing sorted content: ${error}`);
       }
     }
   );
@@ -143,7 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Регистрируем провайдер форматирования (опционально)
   const formattingProvider =
     vscode.languages.registerDocumentFormattingEditProvider(
-      ['javascript', 'typescript', 'javascriptreact', 'typescriptreact'],
+      SUPPORTED_LANGUAGE_IDS,
       {
         provideDocumentFormattingEdits(
           document: vscode.TextDocument
@@ -161,7 +158,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(formattingProvider);
 
   const codeActionProvider = vscode.languages.registerCodeActionsProvider(
-    ['javascript', 'typescript', 'javascriptreact', 'typescriptreact'],
+    SUPPORTED_LANGUAGE_IDS,
     {
       provideCodeActions(
         document: vscode.TextDocument
@@ -171,22 +168,22 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const quickFixAction = new vscode.CodeAction(
-          'Sort Imports',
+          'Sort Imports & Styles',
           vscode.CodeActionKind.QuickFix
         );
         quickFixAction.command = {
           command: 'sortImports.sortImports',
-          title: 'Sort Imports',
+          title: 'Sort Imports & Styles',
         };
         quickFixAction.isPreferred = true;
 
         const sourceAction = new vscode.CodeAction(
-          'Sort Imports',
+          'Sort Imports & Styles',
           vscode.CodeActionKind.Source.append('sortImports')
         );
         sourceAction.command = {
           command: 'sortImports.sortImports',
-          title: 'Sort Imports',
+          title: 'Sort Imports & Styles',
         };
 
         return [quickFixAction, sourceAction];
@@ -204,10 +201,10 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  console.log('Sort Imports extension is now deactivated!');
+  console.log('Sort Content extension is now deactivated!');
 }
 
-async function runSortImports(provider: SortImportsProvider): Promise<void> {
+async function runSortContent(provider: SortContentProvider): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
     vscode.window.showErrorMessage('No active editor found');
@@ -217,15 +214,15 @@ async function runSortImports(provider: SortImportsProvider): Promise<void> {
   const document = editor.document;
   if (!isSupportedLanguage(document.languageId)) {
     vscode.window.showErrorMessage(
-      'Sort Imports only works with JavaScript and TypeScript files'
+      'Sorting only works with JavaScript, TypeScript, and style files'
     );
     return;
   }
 
-  const didChange = await provider.sortImports(editor);
+  const didChange = await provider.sortContent(editor);
   if (didChange) {
-    vscode.window.showInformationMessage('Imports sorted successfully!');
+    vscode.window.showInformationMessage('Content sorted successfully!');
   } else {
-    vscode.window.showInformationMessage('No import changes were needed.');
+    vscode.window.showInformationMessage('No sorting changes were needed.');
   }
 }

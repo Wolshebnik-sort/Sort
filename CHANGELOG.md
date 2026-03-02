@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, adapted for the current extension workflow.
 
+## [0.0.5] - 2026-03-02
+
+### Added
+
+- Support for sorting CSS/SCSS/SASS/LESS property declarations inside style blocks.
+- Recursive style sorting for nested selectors and nested at-rules such as `@media`.
+- Regression tests for style sorting and project-alias detection behavior.
+- A `sortImports.enableStyleSorting` setting so style-file sorting can be enabled explicitly instead of running by default.
+- A `sortImports.styleGroupsOrder` setting to reorder built-in style property groups without redefining individual property order.
+
+### Changed
+
+- Refactored the internal sorting pipeline from `sortImports/*` into a broader `sortContent/*` structure.
+- Split the style sorting implementation into smaller modules for parser, formatter, property order, and node types.
+- Style sorting now supports built-in group families such as `padding-*`, `margin-*`, `flex-*`, `grid-*`, and keeps CSS custom properties (`--*`) at the top of each block.
+- SCSS interpolation inside declarations such as `#{$color}` is now handled safely during style parsing.
+- `sortImports.mergeDuplicateImports` is now disabled by default and must be enabled explicitly when desired.
+- Updated the extension naming to `Sort Imports & Styles` in commands and configuration UI text.
+- Updated the README to document the broader imports-and-styles behavior, current defaults, style group ordering, and the project-config alias detection behavior.
+- Updated the build script to clean `out/` before compilation so packaged VSIX files do not include stale artifacts from old module paths.
+
 ## [0.0.4] - 2026-02-28
 
 ### Added
