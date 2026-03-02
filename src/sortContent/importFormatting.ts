@@ -1,40 +1,50 @@
-import { ImportGroupKey, ImportGroups, ParsedImportBlock, SortConfig } from './types';
 import { StructuredTypeSorter } from './structuredTypeSorter';
-
-const structuredTypeSorter = new StructuredTypeSorter();
+import {
+  SortConfig,
+  ImportGroups,
+  ImportGroupKey,
+  ParsedImportBlock,
+} from './types';
 
 interface ParsedImportClause {
+  mergeable: boolean;
+  namedSpecifiers: string[];
   defaultImport: string | null;
   namespaceImport: string | null;
-  namedSpecifiers: string[];
-  mergeable: boolean;
 }
-
 interface MergedImportEntry {
-  source: string;
   quote: string;
+  source: string;
   isTypeOnly: boolean;
   hasSemicolon: boolean;
   clause: ParsedImportClause | null;
 }
 
+const structuredTypeSorter = new StructuredTypeSorter();
+
 export function compareStrings(
   a: string,
   b: string,
-  mode: 'length' | 'alphabetical'
+  mode: 'length' | 'alphabetical',
 ): number {
   if (mode === 'alphabetical') {
     return a.localeCompare(b, undefined, { sensitivity: 'base' });
   }
 
-  return a.length - b.length || a.localeCompare(b, undefined, { sensitivity: 'base' });
+  return (
+    a.length - b.length ||
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
 }
 
 export function sortTypeMembers(block: string, config: SortConfig): string {
   return structuredTypeSorter.sort(block, config);
 }
 
-export function getImportGroup(block: string, config: SortConfig): ImportGroupKey | null {
+export function getImportGroup(
+  block: string,
+  config: SortConfig,
+): ImportGroupKey | null {
   const normalizedBlock = block.replace(/\s+/g, ' ').trim();
   const source = getImportSource(normalizedBlock);
   if (!source) {
@@ -42,7 +52,9 @@ export function getImportGroup(block: string, config: SortConfig): ImportGroupKe
   }
 
   if (isSideEffectImport(normalizedBlock)) {
-    return isStyleImport(source, config.styleExtensions) ? 'styles' : 'sideEffect';
+    return isStyleImport(source, config.styleExtensions)
+      ? 'styles'
+      : 'sideEffect';
   }
 
   if (isStyleImport(source, config.styleExtensions)) {
@@ -65,30 +77,40 @@ export function formatImportBlock(block: string, config: SortConfig): string {
   const parsedImport = parseImportBlock(normalizedBlock);
   if (!parsedImport?.importClause) return block;
 
-  const namedRange = findNamedImportsRange(parsedImport.importClause, structuredTypeSorter);
+  const namedRange = findNamedImportsRange(
+    parsedImport.importClause,
+    structuredTypeSorter,
+  );
   if (!namedRange) return normalizedBlock;
 
   const beforeNamed = parsedImport.importClause
     .slice(0, namedRange.openBraceIdx)
     .trim()
     .replace(/,\s*$/, '');
-  const afterNamed = parsedImport.importClause.slice(namedRange.closeBraceIdx + 1).trim();
+  const afterNamed = parsedImport.importClause
+    .slice(namedRange.closeBraceIdx + 1)
+    .trim();
   const imports = parseNamedImports(
-    parsedImport.importClause.slice(namedRange.openBraceIdx + 1, namedRange.closeBraceIdx)
+    parsedImport.importClause.slice(
+      namedRange.openBraceIdx + 1,
+      namedRange.closeBraceIdx,
+    ),
   )
     .sort((a, b) =>
       compareStrings(
         getNamedImportSortKey(a, config.sortMode),
         getNamedImportSortKey(b, config.sortMode),
-        config.sortMode
-      )
+        config.sortMode,
+      ),
     )
     .map((specifier) => specifier.raw);
 
   if (!imports.length) return normalizedBlock;
 
   const namedImportsSingleLine = `{ ${imports.join(', ')} }`;
-  const clauseParts = [beforeNamed, namedImportsSingleLine, afterNamed].filter(Boolean);
+  const clauseParts = [beforeNamed, namedImportsSingleLine, afterNamed].filter(
+    Boolean,
+  );
   const importKeyword = parsedImport.isTypeOnly ? 'import type' : 'import';
   const singleLineResult =
     `${importKeyword} ${clauseParts.join(', ')} from ${parsedImport.quote}${parsedImport.source}${parsedImport.quote}` +
@@ -113,7 +135,7 @@ export function formatImportBlock(block: string, config: SortConfig): string {
 export function compareImportStatements(
   a: string,
   b: string,
-  mode: 'length' | 'alphabetical'
+  mode: 'length' | 'alphabetical',
 ): number {
   const parsedA = parseImportBlock(a.replace(/\s+/g, ' ').trim());
   const parsedB = parseImportBlock(b.replace(/\s+/g, ' ').trim());
@@ -124,16 +146,25 @@ export function compareImportStatements(
 
   if (mode === 'alphabetical') {
     return (
-      parsedA.source.localeCompare(parsedB.source, undefined, { sensitivity: 'base' }) ||
-      getTypeImportRank(parsedA.isTypeOnly) - getTypeImportRank(parsedB.isTypeOnly) ||
-      compareImportClausesAlphabetically(parsedA.importClause, parsedB.importClause)
+      parsedA.source.localeCompare(parsedB.source, undefined, {
+        sensitivity: 'base',
+      }) ||
+      getTypeImportRank(parsedA.isTypeOnly) -
+        getTypeImportRank(parsedB.isTypeOnly) ||
+      compareImportClausesAlphabetically(
+        parsedA.importClause,
+        parsedB.importClause,
+      )
     );
   }
 
   return compareStrings(a, b, mode);
 }
 
-export function mergeImportStatements(blocks: string[], config: SortConfig): string[] {
+export function mergeImportStatements(
+  blocks: string[],
+  config: SortConfig,
+): string[] {
   const mergedEntries: MergedImportEntry[] = [];
   const passthroughBlocks: string[] = [];
 
@@ -147,7 +178,12 @@ export function mergeImportStatements(blocks: string[], config: SortConfig): str
     }
 
     if (!parsedImport.importClause) {
-      if (!mergedEntries.some((entry) => entry.source === parsedImport.source && entry.clause === null)) {
+      if (
+        !mergedEntries.some(
+          (entry) =>
+            entry.source === parsedImport.source && entry.clause === null,
+        )
+      ) {
         mergedEntries.push({
           source: parsedImport.source,
           quote: parsedImport.quote,
@@ -170,7 +206,7 @@ export function mergeImportStatements(blocks: string[], config: SortConfig): str
         entry.source === parsedImport.source &&
         entry.isTypeOnly === parsedImport.isTypeOnly &&
         entry.clause !== null &&
-        canMergeImportClauses(entry.clause, parsedClause)
+        canMergeImportClauses(entry.clause, parsedClause),
     );
 
     if (!mergeTarget) {
@@ -189,7 +225,8 @@ export function mergeImportStatements(blocks: string[], config: SortConfig): str
       continue;
     }
 
-    mergeTarget.hasSemicolon = mergeTarget.hasSemicolon || parsedImport.hasSemicolon;
+    mergeTarget.hasSemicolon =
+      mergeTarget.hasSemicolon || parsedImport.hasSemicolon;
     const existingClause = mergeTarget.clause;
     if (!existingClause) {
       passthroughBlocks.push(formatImportBlock(block, config));
@@ -217,7 +254,9 @@ export function parseImportBlock(block: string): ParsedImportBlock | null {
     };
   }
 
-  const match = block.match(/^import\s+(type\s+)?(.+?)\s+from\s+(['"])([^'"]+)\3\s*(;)?$/);
+  const match = block.match(
+    /^import\s+(type\s+)?(.+?)\s+from\s+(['"])([^'"]+)\3\s*(;)?$/,
+  );
   if (!match) {
     return null;
   }
@@ -246,7 +285,11 @@ function isSideEffectImport(block: string): boolean {
 }
 
 function isExternalLib(source: string, aliasPrefixes: string[]): boolean {
-  return !source.startsWith('.') && !source.startsWith('/') && !isAliasImport(source, aliasPrefixes);
+  return (
+    !source.startsWith('.') &&
+    !source.startsWith('/') &&
+    !isAliasImport(source, aliasPrefixes)
+  );
 }
 
 function isAliasImport(source: string, aliasPrefixes: string[]): boolean {
@@ -269,14 +312,17 @@ function isStyleImport(source: string, styleExtensions: string[]): boolean {
 
 function findNamedImportsRange(
   importClause: string,
-  braceMatcher: StructuredTypeSorter
+  braceMatcher: StructuredTypeSorter,
 ): { openBraceIdx: number; closeBraceIdx: number } | null {
   const openBraceIdx = importClause.indexOf('{');
   if (openBraceIdx === -1) {
     return null;
   }
 
-  const closeBraceIdx = braceMatcher.findMatchingBraceIndex(importClause, openBraceIdx);
+  const closeBraceIdx = braceMatcher.findMatchingBraceIndex(
+    importClause,
+    openBraceIdx,
+  );
   if (closeBraceIdx === -1) {
     return null;
   }
@@ -295,7 +341,10 @@ function parseImportClause(importClause: string): ParsedImportClause {
       .replace(/,\s*$/, '');
     const afterNamed = trimmedClause.slice(namedRange.closeBraceIdx + 1).trim();
     const namedSpecifiers = parseNamedImports(
-      trimmedClause.slice(namedRange.openBraceIdx + 1, namedRange.closeBraceIdx)
+      trimmedClause.slice(
+        namedRange.openBraceIdx + 1,
+        namedRange.closeBraceIdx,
+      ),
     ).map((specifier) => specifier.raw);
 
     return {
@@ -353,7 +402,9 @@ function parseImportClause(importClause: string): ParsedImportClause {
   };
 }
 
-function parseNamedImports(specifiersBlock: string): Array<{ raw: string; sortKey: string }> {
+function parseNamedImports(
+  specifiersBlock: string,
+): Array<{ raw: string; sortKey: string }> {
   return specifiersBlock
     .split(',')
     .map((specifier) => specifier.trim())
@@ -366,7 +417,7 @@ function parseNamedImports(specifiersBlock: string): Array<{ raw: string; sortKe
 
 function getNamedImportSortKey(
   specifier: { raw: string; sortKey: string },
-  mode: 'length' | 'alphabetical'
+  mode: 'length' | 'alphabetical',
 ): string {
   if (mode === 'alphabetical') {
     return specifier.sortKey;
@@ -375,11 +426,17 @@ function getNamedImportSortKey(
   return specifier.raw;
 }
 
-function compareImportClausesAlphabetically(a: string | null, b: string | null): number {
+function compareImportClausesAlphabetically(
+  a: string | null,
+  b: string | null,
+): number {
   const rankA = getImportClauseRank(a);
   const rankB = getImportClauseRank(b);
 
-  return rankA - rankB || (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' });
+  return (
+    rankA - rankB ||
+    (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
+  );
 }
 
 function getTypeImportRank(isTypeOnly: boolean): number {
@@ -434,7 +491,7 @@ function splitTopLevelImportClause(importClause: string): string[] {
 
 function canMergeImportClauses(
   existingClause: ParsedImportClause,
-  incomingClause: ParsedImportClause
+  incomingClause: ParsedImportClause,
 ): boolean {
   const hasConflictingDefault =
     existingClause.defaultImport &&
@@ -453,19 +510,22 @@ function canMergeImportClauses(
   }
 
   const combinesNamespaceWithNamed =
-    (existingClause.namespaceImport && incomingClause.namedSpecifiers.length > 0) ||
-    (incomingClause.namespaceImport && existingClause.namedSpecifiers.length > 0);
+    (existingClause.namespaceImport &&
+      incomingClause.namedSpecifiers.length > 0) ||
+    (incomingClause.namespaceImport &&
+      existingClause.namedSpecifiers.length > 0);
 
   return !combinesNamespaceWithNamed;
 }
 
 function mergeParsedImportClauses(
   existingClause: ParsedImportClause,
-  incomingClause: ParsedImportClause
+  incomingClause: ParsedImportClause,
 ): ParsedImportClause {
   return {
     defaultImport: existingClause.defaultImport ?? incomingClause.defaultImport,
-    namespaceImport: existingClause.namespaceImport ?? incomingClause.namespaceImport,
+    namespaceImport:
+      existingClause.namespaceImport ?? incomingClause.namespaceImport,
     namedSpecifiers: dedupeNamedSpecifiers([
       ...existingClause.namedSpecifiers,
       ...incomingClause.namedSpecifiers,
@@ -491,7 +551,10 @@ function dedupeNamedSpecifiers(specifiers: string[]): string[] {
   return result;
 }
 
-function formatMergedImportEntry(entry: MergedImportEntry, config: SortConfig): string {
+function formatMergedImportEntry(
+  entry: MergedImportEntry,
+  config: SortConfig,
+): string {
   if (!entry.clause) {
     return `import ${entry.quote}${entry.source}${entry.quote}${entry.hasSemicolon ? ';' : ''}`;
   }
@@ -513,6 +576,6 @@ function formatMergedImportEntry(entry: MergedImportEntry, config: SortConfig): 
     `${importKeyword} ${clauseParts.join(', ')} from ${entry.quote}${entry.source}${entry.quote}${
       entry.hasSemicolon ? ';' : ''
     }`,
-    config
+    config,
   );
 }

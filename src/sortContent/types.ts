@@ -1,3 +1,5 @@
+import type { StyleGroupKey } from './style/types';
+
 export interface ImportGroups {
   directives: string[];
   react: string[];
@@ -33,49 +35,16 @@ export type ImportGroupKey =
 
 export type GroupOrderItem = GroupKey | '__separator__';
 
-export const DEFAULT_GROUP_ORDER: GroupKey[] = [
-  'directives',
-  'react',
-  'libraries',
-  'absolute',
-  'relative',
-  'sideEffect',
-  'styles',
-  'interfaces',
-  'comments',
-  'functions',
-];
-
-export const DEFAULT_GROUP_ORDER_WITH_SEPARATORS: string[] = [
-  'directives',
-  'spacing',
-  'react',
-  'spacing',
-  'libraries',
-  'spacing',
-  'absolute',
-  'spacing',
-  'relative',
-  'spacing',
-  'sideEffect',
-  'spacing',
-  'styles',
-  'spacing',
-  'interfaces',
-  'spacing',
-  'comments',
-  'spacing',
-  'functions',
-];
-
 export interface SortConfig {
   maxLineLength: number;
   indent: string;
   aliasPrefixes: string[];
   detectAliasesFromProjectConfig: boolean;
+  enableStyleSorting: boolean;
   sortMode: 'length' | 'alphabetical';
   mergeDuplicateImports: boolean;
   styleExtensions: string[];
+  styleGroupsOrder: StyleGroupKey[];
   groupsOrder: GroupOrderItem[];
 }
 

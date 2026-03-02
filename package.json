@@ -1,10 +1,10 @@
 {
   "name": "Wolshebnik-sort-imports",
   "publisher": "WolshebnikSort",
-  "displayName": "Automatic Import Sorter",
-  "description": "Automatically sort and organize JavaScript/TypeScript imports with smart grouping and configurable modes",
+  "displayName": "Sort Imports & Styles",
+  "description": "Sort JavaScript/TypeScript imports and CSS/SCSS style properties with smart grouping and configurable modes",
   "license": "MIT",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -26,25 +26,29 @@
     "onLanguage:javascript",
     "onLanguage:typescript",
     "onLanguage:javascriptreact",
-    "onLanguage:typescriptreact"
+    "onLanguage:typescriptreact",
+    "onLanguage:css",
+    "onLanguage:scss",
+    "onLanguage:less",
+    "onLanguage:sass"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "sortImports.sortImports",
-        "title": "Sort Imports",
-        "category": "Sort Imports"
+        "title": "Sort Imports & Styles",
+        "category": "Sort Imports & Styles"
       },
       {
         "command": "sortImports.applySortImports",
-        "title": "Apply Sort Imports",
-        "category": "Sort Imports"
+        "title": "Apply Sort Imports & Styles",
+        "category": "Sort Imports & Styles"
       },
       {
         "command": "sortImports.previewSortImports",
-        "title": "Preview Sort Imports",
-        "category": "Sort Imports"
+        "title": "Preview Sort Imports & Styles",
+        "category": "Sort Imports & Styles"
       }
     ],
     "keybindings": [
@@ -52,50 +56,50 @@
         "command": "sortImports.applySortImports",
         "key": "ctrl+alt+o",
         "mac": "cmd+alt+o",
-        "when": "editorTextFocus && (resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx)"
+        "when": "editorTextFocus && (resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx || resourceExtname == .css || resourceExtname == .scss || resourceExtname == .less || resourceExtname == .sass)"
       },
       {
         "command": "sortImports.previewSortImports",
         "key": "ctrl+alt+i",
         "mac": "cmd+alt+i",
-        "when": "editorTextFocus && (resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx)"
+        "when": "editorTextFocus && (resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx || resourceExtname == .css || resourceExtname == .scss || resourceExtname == .less || resourceExtname == .sass)"
       }
     ],
     "menus": {
       "editor/context": [
         {
           "command": "sortImports.sortImports",
-          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx",
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx || resourceExtname == .css || resourceExtname == .scss || resourceExtname == .less || resourceExtname == .sass",
           "group": "1_modification@1"
         },
         {
           "command": "sortImports.applySortImports",
-          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx",
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx || resourceExtname == .css || resourceExtname == .scss || resourceExtname == .less || resourceExtname == .sass",
           "group": "1_modification@2"
         },
         {
           "command": "sortImports.previewSortImports",
-          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx",
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx || resourceExtname == .css || resourceExtname == .scss || resourceExtname == .less || resourceExtname == .sass",
           "group": "1_modification@3"
         }
       ],
       "commandPalette": [
         {
           "command": "sortImports.sortImports",
-          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx"
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx || resourceExtname == .css || resourceExtname == .scss || resourceExtname == .less || resourceExtname == .sass"
         },
         {
           "command": "sortImports.applySortImports",
-          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx"
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx || resourceExtname == .css || resourceExtname == .scss || resourceExtname == .less || resourceExtname == .sass"
         },
         {
           "command": "sortImports.previewSortImports",
-          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx"
+          "when": "resourceExtname == .js || resourceExtname == .ts || resourceExtname == .jsx || resourceExtname == .tsx || resourceExtname == .css || resourceExtname == .scss || resourceExtname == .less || resourceExtname == .sass"
         }
       ]
     },
     "configuration": {
-      "title": "Sort Imports",
+      "title": "Sort Imports & Styles",
       "properties": {
         "sortImports.maxLineLength": {
           "type": "number",
@@ -121,6 +125,11 @@
           "default": false,
           "description": "Automatically detect alias prefixes from nearby tsconfig/jsconfig files and simple vite/webpack alias definitions"
         },
+        "sortImports.enableStyleSorting": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable sorting of CSS/SCSS/SASS/LESS declarations in style files"
+        },
         "sortImports.styleExtensions": {
           "type": "array",
           "default": [
@@ -130,6 +139,37 @@
             ".less"
           ],
           "description": "File extensions that should be grouped as style imports"
+        },
+        "sortImports.styleGroupsOrder": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "customProperties",
+              "position",
+              "size",
+              "spacing",
+              "layout",
+              "overflow",
+              "typography",
+              "visual",
+              "effects",
+              "interaction"
+            ]
+          },
+          "default": [
+            "customProperties",
+            "position",
+            "size",
+            "spacing",
+            "layout",
+            "overflow",
+            "typography",
+            "visual",
+            "effects",
+            "interaction"
+          ],
+          "description": "Custom order for style property groups. The internal property order inside each group stays built in"
         },
         "sortImports.groupsOrder": {
           "type": "array",
@@ -188,14 +228,16 @@
         },
         "sortImports.mergeDuplicateImports": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Merge compatible duplicate imports from the same source while sorting"
         }
       }
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "clean": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\"",
+    "compile": "npm run clean && tsc -p ./",
+    "test": "npm run compile && node --test test/*.test.js",
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {

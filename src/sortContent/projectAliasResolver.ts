@@ -2,38 +2,39 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-const DEFAULT_ALIAS_PREFIXES = ['@/', '~/', 'src/'];
-const PROJECT_CONFIG_FILES = ['tsconfig.json', 'jsconfig.json'];
-const BUNDLER_CONFIG_FILES = [
-  'vite.config.ts',
-  'vite.config.js',
-  'vite.config.mts',
-  'vite.config.mjs',
-  'vite.config.cts',
-  'vite.config.cjs',
-  'webpack.config.ts',
-  'webpack.config.js',
-  'webpack.config.mts',
-  'webpack.config.mjs',
-  'webpack.config.cts',
-  'webpack.config.cjs',
-];
+import {
+  BUNDLER_CONFIG_FILES,
+  PROJECT_CONFIG_FILES,
+  DEFAULT_ALIAS_PREFIXES,
+} from './defaults';
 
 export function resolveAliasPrefixes(
   documentUri: vscode.Uri | undefined,
   manualAliasPrefixes: string[],
-  detectFromProjectConfig: boolean
+  detectFromProjectConfig: boolean,
 ): string[] {
   const normalizedManualPrefixes = normalizeAliasPrefixes(manualAliasPrefixes);
-  const normalizedDefaultPrefixes = normalizeAliasPrefixes(DEFAULT_ALIAS_PREFIXES);
+  const normalizedDefaultPrefixes = normalizeAliasPrefixes(
+    DEFAULT_ALIAS_PREFIXES,
+  );
 
-  if (!detectFromProjectConfig || !documentUri || documentUri.scheme !== 'file') {
-    return uniquePreservingOrder([...normalizedManualPrefixes, ...normalizedDefaultPrefixes]);
+  if (
+    !detectFromProjectConfig ||
+    !documentUri ||
+    documentUri.scheme !== 'file'
+  ) {
+    return uniquePreservingOrder([
+      ...normalizedManualPrefixes,
+      ...normalizedDefaultPrefixes,
+    ]);
   }
 
   const projectRoot = findNearestProjectRoot(documentUri.fsPath);
   if (!projectRoot) {
-    return uniquePreservingOrder([...normalizedManualPrefixes, ...normalizedDefaultPrefixes]);
+    return uniquePreservingOrder([
+      ...normalizedManualPrefixes,
+      ...normalizedDefaultPrefixes,
+    ]);
   }
 
   const detectedPrefixes = [
@@ -49,8 +50,11 @@ export function resolveAliasPrefixes(
 }
 
 function findNearestProjectRoot(filePath: string): string | null {
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
-  const workspaceRoot = workspaceFolder?.uri.fsPath ?? path.parse(filePath).root;
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(
+    vscode.Uri.file(filePath),
+  );
+  const workspaceRoot =
+    workspaceFolder?.uri.fsPath ?? path.parse(filePath).root;
   let currentDir = path.dirname(filePath);
 
   while (currentDir.startsWith(workspaceRoot)) {
@@ -75,14 +79,14 @@ function findNearestProjectRoot(filePath: string): string | null {
 
 function hasAnyProjectConfig(directoryPath: string): boolean {
   return [...PROJECT_CONFIG_FILES, ...BUNDLER_CONFIG_FILES].some((fileName) =>
-    fs.existsSync(path.join(directoryPath, fileName))
+    fs.existsSync(path.join(directoryPath, fileName)),
   );
 }
 
 function resolveTypeScriptAliasPrefixes(projectRoot: string): string[] {
-  const configPaths = PROJECT_CONFIG_FILES.map((fileName) => path.join(projectRoot, fileName)).filter((filePath) =>
-    fs.existsSync(filePath)
-  );
+  const configPaths = PROJECT_CONFIG_FILES.map((fileName) =>
+    path.join(projectRoot, fileName),
+  ).filter((filePath) => fs.existsSync(filePath));
   const detectedPrefixes: string[] = [];
   const visitedConfigPaths = new Set<string>();
 
@@ -96,10 +100,13 @@ function resolveTypeScriptAliasPrefixes(projectRoot: string): string[] {
 function collectTypeScriptAliases(
   configPath: string,
   visitedConfigPaths: Set<string>,
-  output: string[]
+  output: string[],
 ): void {
   const normalizedConfigPath = path.normalize(configPath);
-  if (visitedConfigPaths.has(normalizedConfigPath) || !fs.existsSync(normalizedConfigPath)) {
+  if (
+    visitedConfigPaths.has(normalizedConfigPath) ||
+    !fs.existsSync(normalizedConfigPath)
+  ) {
     return;
   }
 
@@ -123,22 +130,35 @@ function collectTypeScriptAliases(
 
   const extendsConfig = parsedConfig.extends;
   if (typeof extendsConfig === 'string') {
-    const extendedConfigPath = resolveExtendedConfigPath(normalizedConfigPath, extendsConfig);
+    const extendedConfigPath = resolveExtendedConfigPath(
+      normalizedConfigPath,
+      extendsConfig,
+    );
     if (extendedConfigPath) {
       collectTypeScriptAliases(extendedConfigPath, visitedConfigPaths, output);
     }
   }
 
-  const references = Array.isArray(parsedConfig.references) ? parsedConfig.references : [];
+  const references = Array.isArray(parsedConfig.references)
+    ? parsedConfig.references
+    : [];
   for (const reference of references) {
-    const referencePath = typeof reference?.path === 'string' ? reference.path : null;
+    const referencePath =
+      typeof reference?.path === 'string' ? reference.path : null;
     if (!referencePath) {
       continue;
     }
 
-    const resolvedReferenceConfigPath = resolveReferencedConfigPath(normalizedConfigPath, referencePath);
+    const resolvedReferenceConfigPath = resolveReferencedConfigPath(
+      normalizedConfigPath,
+      referencePath,
+    );
     if (resolvedReferenceConfigPath) {
-      collectTypeScriptAliases(resolvedReferenceConfigPath, visitedConfigPaths, output);
+      collectTypeScriptAliases(
+        resolvedReferenceConfigPath,
+        visitedConfigPaths,
+        output,
+      );
     }
   }
 }
@@ -210,10 +230,13 @@ function findPropertyBlocks(
   sourceText: string,
   propertyName: string,
   openChar: '{' | '[',
-  closeChar: '}' | ']'
+  closeChar: '}' | ']',
 ): string[] {
   const results: string[] = [];
-  const propertyPattern = new RegExp(`${propertyName}\\s*:\\s*\\${openChar}`, 'g');
+  const propertyPattern = new RegExp(
+    `${propertyName}\\s*:\\s*\\${openChar}`,
+    'g',
+  );
   let match: RegExpExecArray | null = null;
 
   while ((match = propertyPattern.exec(sourceText)) !== null) {
@@ -222,7 +245,12 @@ function findPropertyBlocks(
       continue;
     }
 
-    const closeIndex = findMatchingDelimiterIndex(sourceText, openIndex, openChar, closeChar);
+    const closeIndex = findMatchingDelimiterIndex(
+      sourceText,
+      openIndex,
+      openChar,
+      closeChar,
+    );
     if (closeIndex === -1) {
       continue;
     }
@@ -238,7 +266,7 @@ function findMatchingDelimiterIndex(
   text: string,
   openIndex: number,
   openChar: '{' | '[',
-  closeChar: '}' | ']'
+  closeChar: '}' | ']',
 ): number {
   let depth = 0;
   let inSingleQuote = false;
@@ -327,21 +355,38 @@ function findMatchingDelimiterIndex(
   return -1;
 }
 
-function resolveExtendedConfigPath(fromConfigPath: string, extendsValue: string): string | null {
+function resolveExtendedConfigPath(
+  fromConfigPath: string,
+  extendsValue: string,
+): string | null {
   if (!extendsValue.startsWith('.')) {
     return null;
   }
 
-  return resolveConfigPathCandidate(path.resolve(path.dirname(fromConfigPath), extendsValue));
+  return resolveConfigPathCandidate(
+    path.resolve(path.dirname(fromConfigPath), extendsValue),
+  );
 }
 
-function resolveReferencedConfigPath(fromConfigPath: string, referencePath: string): string | null {
-  const resolvedReferencePath = path.resolve(path.dirname(fromConfigPath), referencePath);
+function resolveReferencedConfigPath(
+  fromConfigPath: string,
+  referencePath: string,
+): string | null {
+  const resolvedReferencePath = path.resolve(
+    path.dirname(fromConfigPath),
+    referencePath,
+  );
 
-  if (fs.existsSync(resolvedReferencePath) && fs.statSync(resolvedReferencePath).isDirectory()) {
-    return PROJECT_CONFIG_FILES.map((fileName) => path.join(resolvedReferencePath, fileName)).find((filePath) =>
-      fs.existsSync(filePath)
-    ) ?? resolveConfigPathCandidate(path.join(resolvedReferencePath, 'tsconfig'));
+  if (
+    fs.existsSync(resolvedReferencePath) &&
+    fs.statSync(resolvedReferencePath).isDirectory()
+  ) {
+    return (
+      PROJECT_CONFIG_FILES.map((fileName) =>
+        path.join(resolvedReferencePath, fileName),
+      ).find((filePath) => fs.existsSync(filePath)) ??
+      resolveConfigPathCandidate(path.join(resolvedReferencePath, 'tsconfig'))
+    );
   }
 
   return resolveConfigPathCandidate(resolvedReferencePath);
@@ -396,7 +441,7 @@ function normalizeAliasPrefixes(prefixes: string[]): string[] {
   return uniquePreservingOrder(
     prefixes
       .map((prefix) => normalizeAliasPrefix(prefix))
-      .filter((prefix): prefix is string => Boolean(prefix))
+      .filter((prefix): prefix is string => Boolean(prefix)),
   );
 }
 
